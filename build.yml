@@ -1,0 +1,74 @@
+name: Build HoneyVoxFX
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:  # Allows manual trigger from GitHub
+
+jobs:
+  build-mac:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install JUCE
+        run: |
+          curl -L -o juce.zip https://github.com/juce-framework/JUCE/releases/download/7.0.9/juce-7.0.9-osx.zip
+          unzip juce.zip
+          mv JUCE juce
+
+      - name: Build Projucer
+        run: |
+          cd juce/extras/Projucer/Builds/MacOSX
+          xcodebuild -project Projucer.xcodeproj -configuration Release -jobs 4
+
+      - name: Export Xcode Project
+        run: |
+          ./juce/extras/Projucer/Builds/MacOSX/build/Release/Projucer.app/Contents/MacOS/Projucer --resave HoneyVoxFX.jucer
+
+      - name: Build VST3
+        run: |
+          cd Builds/MacOSX
+          xcodebuild -project HoneyVoxFX.xcodeproj -configuration Release -target "HoneyVoxFX - VST3" -jobs 4
+
+      - name: Upload Mac VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: HoneyVoxFX-Mac-VST3
+          path: Builds/MacOSX/build/Release/HoneyVoxFX.vst3
+
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install JUCE
+        run: |
+          curl -L -o juce.zip https://github.com/juce-framework/JUCE/releases/download/7.0.9/juce-7.0.9-windows.zip
+          Expand-Archive -Path juce.zip -DestinationPath .
+          Rename-Item JUCE juce
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1.1
+
+      - name: Build Projucer
+        run: |
+          msbuild juce/extras/Projucer/Builds/VisualStudio2022/Projucer.sln /p:Configuration=Release /p:Platform=x64
+
+      - name: Export Visual Studio Project
+        run: |
+          ./juce/extras/Projucer/Builds/VisualStudio2022/x64/Release/App/Projucer.exe --resave HoneyVoxFX.jucer
+
+      - name: Build VST3
+        run: |
+          msbuild Builds/VisualStudio2022/HoneyVoxFX.sln /p:Configuration=Release /p:Platform=x64
+
+      - name: Upload Windows VST3
+        uses: actions/upload-artifact@v4
+        with:
+          name: HoneyVoxFX-Windows-VST3
+          path: Builds/VisualStudio2022/x64/Release/VST3/HoneyVoxFX.vst3
